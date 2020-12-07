@@ -76,8 +76,8 @@ class InternetStreamService(
         }
     }
 
-    fun fetchFile(url: String): MutableList<Budget> {
-        val budgets: MutableList<Budget> = mutableListOf()
+    fun fetchFile(url: String): Sequence<Budget> {
+        val budgets: MutableList<Sequence<Budget>> = mutableListOf()
         val downloadInputStream = resourceLoader.getResource(url).inputStream
         downloadInputStream.use {
             val zipInputStream = ZipInputStream(downloadInputStream)
@@ -86,13 +86,13 @@ class InternetStreamService(
                 while (ze != null) {
                     if (ze.name == "RU.csv" || ze.name == "SK.csv") {
                         val budget = parseBudgets(zipInputStream)
-                        budgets.addAll(budget)
+                        budgets.add(budget)
                     }
                     ze = zipInputStream.nextEntry
                 }
             }
         }
-        return budgets
+        return budgets.asSequence().flatten()
     }
 
     fun isProfileIdPresent(url: String): Boolean {
@@ -113,9 +113,9 @@ class InternetStreamService(
 
     // Parses .csv file which is provided as ByteArray
     // returns list of parsed budgets
-    fun parseBudgets(inputStream: InputStream): List<Budget> {
+    fun parseBudgets(inputStream: InputStream): Sequence<Budget> {
         val csvParser = CSVParser.parse(inputStream, Charsets.UTF_8, csvFormat)
-        val records = csvParser.records
+        val records = csvParser.asSequence()
         return records.map {
             val type = it.get("DOKLAD_AGENDA")
             val paragraph = it.get("PARAGRAF").toInt()
@@ -147,9 +147,9 @@ class InternetStreamService(
         }
     }
 
-    fun saveCityBudgets(cityId: Int, budgets: List<Budget>) {
+    fun saveCityBudgets(cityId: Int, budgets: Sequence<Budget>) {
         transaction {
-            Payments.batchInsert(budgets) {
+            Payments.batchInsert(budgets.asIterable()) {
                 this[Payments.profileId] = cityId
                 this[Payments.amount] = it.amount
                 this[Payments.counterpartyId] = it.counterpartyId
